@@ -1,0 +1,60 @@
+# 更新记录
+
+按版本从新到旧。每段标题就是 tag 名（`## [2026.10.12] - 2026-10-12`）——推 tag 时由
+`.github/workflows/release.yml` 把这一段抽出来当 Release 报告。
+所以发版的规矩只有一条：**先在文件顶上补一段，再打标签**。抽不到那一段（或那一段是空的），
+Release 就退回 GitHub 自动生成的提交清单。
+
+版本号用日期式（`2026.10.12`），与 `package.json` 的 `version`、tag 名同号。
+
+## [2026.10.12] - 2026-10-12
+
+### 首次以 dsh 插件包发布：马良模式
+
+- 新增本包，把原生的**创造模式（`cordis` 预设）**汉化：`package.json` 的 `dsh.bundle.patch`
+  指向包内 `cordis.patch.yml`，后者按 Loader 行 id **覆盖** `@deepseek-ai/dsh-web-app` 那份
+  `preset-cordis`（顶层 `- id: preset-cordis` 且不带 `insert`）。安装、更新、卸载全部交给 dsh
+  自己的插件管理（插件页，或 `dsh plugin --profile <p> add github:Alm-Allen/dsh-maliang-preset`）。
+- 界面里**不新增条目**：仍是原生的「创造模式」（`dsh-client-ui-agent-preset` 的
+  `presetCordisName`），名字、位置、`config.id = cordis` 全部照旧，本包只换掉它加载的插件列表
+  （多一个中文化层 `maliang-zh`，persona 置空）。dsh 自己会在组合结果里标注归因：
+  `# == @deepseek-ai/dsh-web-app, patched by @alm-allen/dsh-maliang-preset`。
+- 汉化层 `maliang-zh.mjs` 与雅言（`standard`）**同一张表、同一套机制**：创造模式与标准模式都是
+  **原生呈现**（没有 `run_code` 中介），`translateTool` 逐个工具翻译 `description` 与参数描述
+  就是主路径。创造模式多出来的到达面已核对覆盖：
+  - `cordis_inspect_list` / `cordis_inspect_query`（`@deepseek-ai/dsh-tool-cordis`）的工具描述
+    与参数描述在表里；
+  - `skill-filesystem` 的 `customSkillDirs` 挂出的四条开发指引（`agent-experience`、
+    `cordis-plugin-development`、`editing-cordis-compositions`、`cordis-composition-reference`）
+    的**描述**在表里，走 `agent/pre-step` 的技能目录路径翻译；技能正文是随包出货的文件，不改；
+  - `workflow-ptc` / `tool-workflow` 在这个预设里是**启用**的（PTC 那边整组关掉），它们的工具
+    描述与 guidance 也在表里。
+- 组合逐行照抄 shipped `cordis`，三处必须原样保留的地方都没有简化：
+  `skill-filesystem.config.customSkillDirs` 的 `!!js` 表达式（Loader 评估时提供 `baseUrl`，
+  它解析到本机那份 `dsh-agent-preset` 的 `skills/`）、`tool-plugin-manager` 的
+  `disabled: !!js "!ctx.get('profileContext')"`（与 `standard`/`ptc` 的 `disabled: true` 不同，
+  创造模式"让 Agent 创建插件"正是靠它）、以及 workflow/ralph 那一组与 shipped 相同的启用/禁用
+  状态（`tool-ralph` 保持 `disabled: true`）。
+- 两版兼容（一份 patch 同时服务 `0.2.0-rc.2` 与 `0.2.1-alpha.2`），基准取 rc.2 的 shipped 逐行
+  重述。两版 shipped `cordis` 的差异已核对：rc.2 有 `tool-subagent-codex` /
+  `tool-subagent-claude-code` / `tool-ralph`（三行都 `disabled: true`），persona 带
+  `suffix: Your working directory is {{cwd}}.`，没有 `time-context` / `tool-schedule`；
+  alpha.2 没有那三行，改挂 `time-context` 与 `tool-schedule`，给两个启用的 subagent 行加了
+  `toolFilter.deny`，persona 只有 `prefix`。另外两版的 plan-mode 首句措辞不同，本包的中文对应
+  **rc.2** 那一版。
+- `tool-schedule` **故意不收录**：rc.2 的包里没有 `@deepseek-ai/dsh-tool-schedule`（只有
+  `dsh-schedule`），而一行引用不到的包会让整个预设激活失败、组不成会话。代价是 Desktop 上少
+  一个 schedule 工具行（属可选能力）。`time-context` 两版都有包故收录，Desktop 因此不比原生
+  创造模式少这项；alpha.2 的 `toolFilter` 未跟随——它在 rc.2 的 schema 里未必被接受，而不 deny
+  的唯一后果是 subagent 可能多看到几个 schedule 工具，本文件根本没挂那几行。
+- 自测与审计脚本（`self-test.mjs`、`audit-coverage.mjs`）一并进包。`self-test.mjs` 除了四条通用
+  纪律（section 数量、未注册变量、幂等、环境无关），还单独断言技能目录里那四条创造模式指引的
+  描述必须被翻到。
+- 缓存与注入审查：`dsh-agent-loop` 的 `RuntimeContextProjection.project()` 拿「自己渲染出的
+  文本」与「已落地文本」逐字比较，不等才追加一条 user 消息——两侧同源时恒等、永不重发，只改
+  一侧就会每个 step 追加一条。本次没有触碰这条路径：汉化层改的是 `system-prompt/assemble` 的
+  渲染侧（落地即同一份文本），`translateMessage` 只处理 `<system-reminder>` 开头的注入块。
+  新增的 `time-context` 走 `agent/pre-step` 追加独立 user 消息、默认 10 分钟最小间隔，官方文档
+  明确「仅追加；新可见内容位于可复用请求前缀之后，不会使现有 KV Cache 条目失效」，且其文本不
+  经过翻译层。另外把 persona 置空顺带修掉了 shipped 本身的缓存漏洞——rc.2 的 persona suffix
+  含 `{{cwd}}`，会让系统提示词随工作目录变化。
