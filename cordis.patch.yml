@@ -14,9 +14,9 @@
 # 三条必须守住的规则（见 @deepseek-ai/dsh-agent-preset 的 cordis-composition-reference skill）：
 #
 #   1. **`config` 是整体替换，绝不深合并**——upstream 那份 `plugins` 列表必须在这里完整重述，
-#      漏一行就等于那个插件消失。本文件的基准是 **0.2.0-rc.2** 的
-#      `dsh-web-app/presets/cordis.patch.yml`：逐行完整重述它，另加 `maliang-zh`（汉化层）与
-#      `time-context`，并把 persona 置空；
+#      漏一行就等于那个插件消失。本文件的基准是 **0.2.1-rc.1** 的
+#      `dsh-web-app/presets/cordis.patch.yml`：逐行完整重述它，另加 `maliang-zh`（汉化层），
+#      并把 persona 置空；
 #   2. `name` 为真值时只是**断言**既有插件名，不是重命名——所以这里保持
 #      `@deepseek-ai/dsh-agent-preset`，而 `config.id` 必须写成 `cordis`：会话保存的是它；
 #   3. 目标行没匹配上时 Loader 只警告并跳过，不会弄坏 profile——所以本包单独装、或 shipped
@@ -28,24 +28,12 @@
 # ⚠️ 代价：override 冻结整份 `config`。dsh 升级后 shipped 文件若新增或改动插件行，本文件不会
 # 自动跟随，需要对照 `dsh-web-app/presets/cordis.patch.yml` 手工核对一次。
 #
-# ⚠️ 两个 dsh 版本的 shipped `cordis` 并不一样（已逐行核对）。本文件按「两版都能加载」取
-# 基准：只收录两版都存在对应插件包的行。
-#
-#   · 0.2.0-rc.2（旧 RC，Web profile 用的那个）——本文件的基准。它的 shipped 里有
-#     `tool-subagent-codex` / `tool-subagent-claude-code`（两行本来就 `disabled: true`）与
-#     `tool-ralph`（同样 `disabled: true`），`persona` 带
-#     `suffix: Your working directory is {{cwd}}.`，没有 `time-context` / `tool-schedule`；
-#   · 0.2.1-alpha.2（最新 alpha，Desktop 用的那个）——shipped 里没有上面那三行，改挂
-#     `time-context` 与 `tool-schedule`，给两个启用的 subagent 行加了
-#     `toolFilter.deny: [schedule_*]`（无 `backgroundMode`），`persona` 只有 `prefix`。
-#
-# `tool-schedule` **故意不收录**：rc.2 的包里没有 `@deepseek-ai/dsh-tool-schedule`
-# （只有 `@deepseek-ai/dsh-schedule`），而一行引用不到的包会让整个预设激活失败、组不成会话。
-# 代价是 Desktop 上少一个 schedule 工具行——属可选能力，且 shipped 本身也对 subagent
-# `deny` 了它。`time-context` 两版都有包，所以收录，Desktop 因此不会比原生创造模式少这项。
-#
-# alpha.2 的 `toolFilter` 也没有跟随：它在 rc.2 的 schema 里未必被接受（未验证），而不 deny 的
-# 唯一后果是 subagent 可能多看到几个 schedule 工具——本文件根本没挂那几行。
+# ⚠️ 基准版本：**0.2.1-rc.1**。Web 的全局 npm 包与 Desktop 内置运行时现在都是它，提示词也与
+# 源码 HEAD 一致（rc.1 之后只多 UI 提交）。上一版维护的「0.2.0-rc.2 + 0.2.1-alpha.2 双版兼容」
+# 已收敛为单一基准：`tool-subagent-codex` / `tool-subagent-claude-code` / `tool-ralph` 三行是
+# rc.2 的遗留（shipped 已删除），本文件不再保留；`tool-schedule` 与 `tool-plugin-market`
+# 在 rc.1 的包里都存在，按 shipped 收录。`persona` 早就不带 `suffix: {{cwd}}.`，这里继续
+# 用空前缀占位（见下方 identity 段注释）。
 - id: preset-cordis
   name: "@deepseek-ai/dsh-agent-preset"
   config:
@@ -142,6 +130,11 @@
       - id: tool-jobs
         name: "@deepseek-ai/dsh-tool-jobs"
 
+      # 定时任务（schedule_*）的注册表在宿主平面，这里只挂面向模型的控制工具。
+      # 0.2.1-rc.1 的 shipped `cordis` 收了这一行，包里也有对应实现，按 shipped 对齐。
+      - id: tool-schedule
+        name: "@deepseek-ai/dsh-tool-schedule"
+
       # ── goals ───────────────────────────────────────────────────────────────────
 
       # goal 服务与会话驱动器留在宿主平面，Gateway 才能解析它们。人类命令与面向模型的
@@ -155,8 +148,8 @@
       # ── plan mode ───────────────────────────────────────────────────────────────
 
       # 计划状态天然是按 agent 的，所以这里 entry-local realm 不是变通，而是正确的生命周期。
-      # 下面这段中文对应 **rc.2** 的 shipped 措辞（alpha.2 首句改写成 "until the user
-      # approves your plan through exit_plan_mode"），两版都只是文案，不影响加载。
+      # 下面这段中文对应 **0.2.1-rc.1** 的 shipped 措辞（"until the user approves your plan
+      # through exit_plan_mode"）。
       - id: planning
         name: cordis:group
         group: true
@@ -167,7 +160,7 @@
             name: "@deepseek-ai/dsh-plan-mode"
             config:
               section: |
-                你处于计划模式。在 exit_plan_mode 成功或用户切换会话模式之前，一直保持在计划模式。用祈使句要求实施改动，意味着规划该实施，而不是执行它。用户的对话式同意——包括回答你提出的某个问题——不构成批准，也不结束计划模式；把已确认的决定并入计划，并通过 exit_plan_mode 提交。
+                你处于计划模式。在用户通过 exit_plan_mode 批准你的计划或切换会话模式之前，一直保持在计划模式。用祈使句要求实施改动，意味着规划该实施，而不是执行它。用户的对话式同意——包括回答你提出的某个问题——不构成批准，也不结束计划模式；把已确认的决定并入计划，并通过 exit_plan_mode 提交。
 
                 先探索。用只读的读取、搜索、静态分析和检查，把计划建立在真实的代码库之上。不要编辑或写入文件、不要改配置、不要运行会重写受跟踪文件的格式化或代码生成、不要提交，也不要其他方式执行计划。优先复用既有函数和模式，而不是新建机制。
 
@@ -235,38 +228,16 @@
               provider: spawn
               toolName: subagent
               modelSelectionSettings: true
-              backgroundMode: continuable
 
           # fork 省略模型选择，使 provider/model 与父级相同，继承的历史保持可用于 KV Cache
-          # 复用。
+          # 复用。`backgroundMode` 在 rc.1 的 shipped 里已经不再写，这里同样不写。
           - id: tool-subagent-fork
             name: "@deepseek-ai/dsh-tool-subagent"
             config:
               provider: fork
               toolName: subagent_fork
-              backgroundMode: continuable
 
-          # 生产版 dsh 不安装这些可选 provider。在本 Profile 安装对应 Bundle 并重启 Host，
-          # 然后复制本预设并从匹配的工具行移除 `disabled`。仅宿主可用并不授予任何工具。
-          - id: tool-subagent-codex
-            name: "@deepseek-ai/dsh-tool-subagent"
-            disabled: true
-            config:
-              provider: codex
-              toolName: subagent_codex
-              backgroundMode: one-shot
-              maxDepth: provider-managed
-
-          - id: tool-subagent-claude-code
-            name: "@deepseek-ai/dsh-tool-subagent"
-            disabled: true
-            config:
-              provider: claude-code
-              toolName: subagent_claude_code
-              backgroundMode: one-shot
-              maxDepth: provider-managed
-
-          # workflow 引擎与它的两个入口：创造模式下是**启用**的（见上面的说明）。
+          # workflow 引擎与它的入口：创造模式下是**启用**的（见上面的说明）。
           - id: workflow-ptc
             name: "@deepseek-ai/dsh-workflow-ptc"
             config:
@@ -274,15 +245,6 @@
 
           - id: tool-workflow
             name: "@deepseek-ai/dsh-tool-workflow"
-
-          # `tool-ralph` 保持 shipped 的 `disabled: true`（rc.2 如此；alpha.2 已删掉这一行）。
-          # 保留它只是为了让 rc.2 的行集完整，功能面与 shipped 一致。
-          - id: tool-ralph
-            name: "@deepseek-ai/dsh-tool-ralph"
-            disabled: true
-            config:
-              subagentProvider: spawn
-              maxRounds: 64
 
       # ── remaining model-facing rows ─────────────────────────────────────────────
 
@@ -339,4 +301,10 @@
       # 创造模式"让 Agent 创建插件"这条路正是靠它安装 bundle，照抄表达式才不会把这条路关掉。
       - id: tool-plugin-manager
         name: "@deepseek-ai/dsh-plugin-manager/tools"
+        disabled: !!js "!ctx.get('profileContext')"
+
+      # 0.2.1-rc.1 新增的读取型工具：浏览已配置的插件市场索引。shipped `cordis` 同样用
+      # 条件表达式，与 `tool-plugin-manager` 一起构成「让 Agent 创建插件」的发现 + 安装链路。
+      - id: tool-plugin-market
+        name: "@deepseek-ai/dsh-plugin-market/tools"
         disabled: !!js "!ctx.get('profileContext')"
