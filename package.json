@@ -1,6 +1,6 @@
 {
   "name": "@alm-allen/dsh-maliang-preset",
-  "version": "2026.10.17",
+  "version": "2026.10.20",
   "description": "马良模式（maliang）：把 DeepSeek Harness 的原生创造模式（cordis）汉化——系统提示词、全部工具描述与技能目录全部中文，模型以中文思维链工作；按 Loader 行 id 覆盖 preset-cordis，不新增预设条目，界面里仍是原生「创造模式」。",
   "type": "module",
   "license": "MIT",
